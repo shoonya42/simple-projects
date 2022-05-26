@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<script src="https://cdn.jsdelivr.net/npm/alasql@1.7"></script>
+<style>
+    .app {
+        text-align: center;
+
+    }
+
+    table {
+        justify-content: center;
+        display: flex;
+        margin-top: 1rem;
+        border-collapse: collapse;
+        cursor: default;
+    }
+
+    th,
+    td {
+        border: 1px solid black;
+    }
+
+    th {
+        background-color: rgb(95, 134, 168);
+    }
+
+    tr:nth-child(even) {
+        background-color: lightgray;
+    }
+
+    hr {
+        width: 50vw;
+    }
+
+    .deleteBtn {
+        width: 100%;
+    }
+
+    .deleteBtn:hover {
+        /*   color: red;
+        font: bold; */
+        background-color: rgb(240, 93, 93);
+        border-color: rgb(240, 93, 93);
+    }
+
+    .saveBtn:hover {
+        /*    color: green; */
+        /* font: bold; */
+        background-color: lightgreen;
+        border-color: lightgreen;
+    }
+
+    .mt1 {
+        margin-top: 1rem;
+    }
+
+    .mb1 {
+        margin-bottom: 1rem;
+    }
+
+    .hide {
+        display: none;
+        /*  visibility: hidden; */
+    }
+
+    .show {
+        /* display: inherit; */
+        visibility: visible;
+    }
+
+    .m\.2 {
+        margin: .2rem;
+    }
+</style>
+
+<body class="app">
+    <hr />
+    <h3>All To-Dos</h3>
+    <hr />
+    <input id='todoInput' class="mt1 mb1" placeholder="Enter a ToDo" onkeydown="enterPressed(event,'addToDOBtn');"
+        autofocus />
+    <button id='addToDOBtn' class="mt1 mb1" onClick="addTodo()">Add To-Do</button>
+    <table id="todosTable">
+        <tr>
+            <th style="width:5vw">Sr. No.</th>
+            <th style="width:5vw">ID</th>
+            <th style="width:30vw">TO DO</th>
+            <th style="width:5vw"></th>
+        </tr>
+    </table>
+    <script>
+        alasql(`CREATE LOCALSTORAGE DATABASE IF NOT EXISTS TD;
+      ATTACH LOCALSTORAGE DATABASE TD;
+      USE TD;
+      CREATE TABLE IF NOT EXISTS TODO (ID INT AUTOINCREMENT, TODO_TEXT STRING)`)
+
+        showAllToDos();
+        function addTodo() {
+            var todoInput = document.getElementById('todoInput').value;
+            if (!todoInput) return;
+
+            var ID = alasql.autoval('TODO', 'ID', true);
+            alasql('INSERT INTO TODO VALUES ?', [{ ID: ID, TODO_TEXT: todoInput }])
+
+            addTableRowAtFirst({ ID: ID, TODO_TEXT: todoInput }) //insertRow(0);//insert at the first position
+
+            document.getElementById('todoInput').value = '';
+        }
+        function showAllToDos() {
+            var allToDos = alasql('SELECT * FROM TODO ORDER BY ID DESC');
+
+
+            allToDos?.forEach(element => addTableRowAtLast(element));
+
+        }
+        function addTableRowAtLast(element) {
+            addTableRow(element, -1); //The value of -1 can also be used, this results in a new row being inserted at the last position. At 1st position in Safari.
+        }
+        function addTableRowAtFirst(element) {
+            addTableRow(element, 1); //At the first row, just after header.
+            setSrNo();
+        }
+        function setSrNo() {
+            var todosTable = document.getElementById('todosTable');
+            var totalRows = todosTable.rows.length;
+
+            for (var i = 1; i <= totalRows - 1; i++) { //-1 to account for Header
+                todosTable.rows[i].firstChild.textContent = i;
+            }
+
+        }
+        function addTableRow(element, position) {
+            var todosTable = document.getElementById('todosTable');
+            var currentIndex = todosTable.rows.length;
+            var currentRow = todosTable.insertRow(position);
+            currentRow.setAttribute("id", element.ID);
+
+            var currentCell = currentRow.insertCell(-1);
+            currentCell.appendChild(document.createTextNode(currentIndex));
+
+            var currentCell = currentRow.insertCell(-1);
+            currentCell.appendChild(document.createTextNode(element.ID));
+
+            currentCell = currentRow.insertCell(-1);
+            currentCell.setAttribute("onclick", "editToDO(event);");
+
+            var todoTextDiv = document.createElement('div');
+            todoTextDiv.setAttribute("id", 'todoTextDiv' + element.ID);
+            todoTextDiv.appendChild(document.createTextNode(element.TODO_TEXT));
+            currentCell.appendChild(todoTextDiv);
+
+            var editField = document.createElement('input');
+            editField.setAttribute("id", 'input' + element.ID);
+            editField.setAttribute("value", element.TODO_TEXT);
+            editField.setAttribute("onclick", "event.stopPropagation();");
+            editField.setAttribute("onkeydown", "enterPressed(event,'saveBtn'+event.target.parentNode.parentNode.id);");
+            editField.setAttribute("class", "hide")
+            editField.setAttribute("onfocus", "focusEditInput(event);")
+            currentCell.appendChild(editField);
+
+            var saveTooltip = document.createElement('abbr');
+            saveTooltip.setAttribute('title', 'Save');
+
+            var saveEdit = document.createElement('input');
+            saveEdit.setAttribute("type", "button");
+            saveEdit.setAttribute("id", 'saveBtn' + element.ID);
+            saveEdit.setAttribute("value", String.fromCharCode(0x2713));
+            saveEdit.setAttribute("onclick", "saveToDO(event);");
+            saveEdit.setAttribute("class", "saveBtn hide m.2")
+            saveTooltip.appendChild(saveEdit);
+            currentCell.appendChild(saveTooltip)
+
+            var tooltip = document.createElement('abbr');
+            tooltip.setAttribute('title', 'Delete');
+
+            var actionButton = document.createElement('input');
+            actionButton.setAttribute("type", "button");
+            actionButton.setAttribute("id", element.ID);
+            actionButton.setAttribute("value", "X");
+            actionButton.setAttribute("onclick", "deleteToDO(event);");
+            actionButton.setAttribute("class", "deleteBtn")
+
+            tooltip.appendChild(actionButton);
+
+            currentCell = currentRow.insertCell(-1);
+            currentCell.appendChild(tooltip);
+        }
+        function deleteToDO(e) {
+            console.log("Deleted To-DO with ID: ", e.target.id);
+            alasql(`DELETE FROM TODO WHERE ID = ?`, parseInt(e.target.id))
+
+            var deleteRow = e.target.parentNode.parentNode.parentNode;
+            deleteRow.parentNode.removeChild(deleteRow);
+
+            setSrNo();
+
+        }
+        function editToDO(e) {
+            if (e.detail == 2) {
+                var id = e.target?.id ? e.target.parentNode.parentNode.id : e.target.parentNode.id;
+                flipVisibleElements(id);
+                document.getElementById('input' + id).focus();
+            }
+        }
+        function saveToDO(e) {
+            e.stopPropagation();
+            var inputID = e.target.parentNode.parentNode.parentNode.id;
+            var inputValue = document.getElementById('input' + inputID).value
+            if (inputValue) {
+                alasql('UPDATE TODO SET TODO_TEXT=? WHERE ID=?', [inputValue, parseInt(inputID)]);
+                flipVisibleElements(inputID);
+                document.getElementById('todoTextDiv' + inputID).textContent = inputValue;
+            }
+        }
+        function flipVisibleElements(id) {
+            var inputField = document.getElementById('input' + id).classList;
+            var saveBtn = document.getElementById('saveBtn' + id).classList;
+            var todoTextDiv = document.getElementById('todoTextDiv' + id).classList;
+
+            inputField.contains("hide") ? inputField.remove("hide") : inputField.add("hide");
+            saveBtn.contains("hide") ? saveBtn.remove("hide") : saveBtn.add("hide");
+
+            todoTextDiv.contains("hide") ? todoTextDiv.remove("hide") : todoTextDiv.add("hide");
+        }
+        function enterPressed(e, id) {
+            if (e.keyCode == 13)
+                document.getElementById(id).click();
+        }
+        function focusEditInput(e) {
+            var val = e.target.value;
+            e.target.value = null;
+            e.target.value = val;
+        }
+    </script>
+</body>
+
+</html>
